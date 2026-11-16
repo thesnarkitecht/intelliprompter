@@ -1,0 +1,23 @@
+#!/bin/sh
+# Usage: intelliprompter serve | stop
+cd "$(dirname "$0")/.." || exit 1
+PIDFILE=.server.pid
+running() { [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; }
+
+case "$1" in
+  serve)
+    if running; then echo "Already running."; grep '→' server.log; exit 0; fi
+    nohup node --env-file-if-exists=.env server.js > server.log 2>&1 &
+    echo $! > "$PIDFILE"
+    sleep 1
+    if running; then grep '→' server.log; else cat server.log; rm -f "$PIDFILE"; exit 1; fi
+    ;;
+  stop)
+    if running; then kill "$(cat "$PIDFILE")"; echo "Stopped."; else echo "Not running."; fi
+    rm -f "$PIDFILE"
+    ;;
+  *)
+    echo "Usage: intelliprompter serve | stop"
+    exit 1
+    ;;
+esac
