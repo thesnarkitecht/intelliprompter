@@ -1,7 +1,7 @@
 // Self-check: core logic + the /api/check proxy against a fake Jev. Run: npm test
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { parseOutline, flatten, buildRequest, readAnswers, applyHits, syncParents, takeSample } from './public/core.js';
+import { parseOutline, flatten, buildRequest, readAnswers, applyHits, syncParents, finishedSections, takeSample } from './public/core.js';
 
 // --- core ---
 const items = parseOutline('- Intro\nAgenda\n  * Results\n    Europe\n\t\tUS\n\t1. Roadmap\n\nClose\n');
@@ -62,6 +62,17 @@ assert.ok(syncParents(items, done).has('Agenda'), 'top level follows the middle 
 done.delete('Agenda › Results › US');
 syncParents(items, done);
 assert.ok(!done.has('Agenda › Results') && !done.has('Agenda'), 'unchecking a leaf unchecks every ancestor');
+
+// finished sections (to fold): only ones that just became done, at every level
+{
+  const d = new Set(['Agenda › Results › Europe', 'Agenda › Roadmap']);
+  let before = new Set(d);
+  d.add('Agenda › Results › US');
+  assert.deepEqual(finishedSections(items, d, before), ['Agenda', 'Agenda › Results']);
+  before = new Set(d);
+  d.add('Close');
+  assert.deepEqual(finishedSections(items, d, before), [], 'already-finished sections are not reported again');
+}
 
 // --- server proxy against a fake Jev ---
 let seen;

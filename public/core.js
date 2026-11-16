@@ -97,3 +97,10 @@ export function syncParents(items, done) {
   items.forEach(sync);
   return done;
 }
+
+// Sections that are finished now but weren't in `before` (a copy of `done` taken earlier).
+// The app folds these up once you finish them.
+export function finishedSections(items, done, before) {
+  syncParents(items, done);
+  return flatten(items).filter(i => i.children.length && done.has(i.key) && !before.has(i.key)).map(i => i.key);
+}

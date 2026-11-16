@@ -49,6 +49,7 @@ To keep the key on the server instead, copy `.env.example` to `.env` and set
   You can also type lines into the box under the transcript.
 - Sections start folded. As soon as you start talking about a section, its sub-items drop down
   (and so on, level by level). Jumping straight to a sub-sub-topic opens the path to it.
+  When everything in a section is done, it folds back up a moment later.
   Use the arrow on a section to open or fold it yourself.
 - Click any item to check or uncheck it yourself. Clicking a parent's box toggles everything under it.
 - Jev is only called when you've said something new since the last check; silence costs nothing.
