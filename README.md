@@ -12,17 +12,29 @@ checked, so you only need to start on a topic. The next open item is highlighted
 
 ## Setup (1 minute)
 
-Needs Node.js 22+ and a TypeSafe API key (from the TypeSafe API console). No `npm install` needed: there are no dependencies.
+Needs Node.js 22+ and a TypeSafe API key (from the TypeSafe API console). There are no dependencies to install.
+
+Install and start (installs to `~/intelliprompter`; re-run it to update):
 
 ```bash
-git clone https://github.com/thesnarkitecht/intelliprompter && cd intelliprompter
+curl -fsSL https://raw.githubusercontent.com/thesnarkitecht/intelliprompter/main/install.sh | sh
 ```
+
+Start serving in the background:
 
 ```bash
-npm start
+npm --prefix ~/intelliprompter run serve
 ```
 
-Open http://localhost:3000. Settings opens on first run: paste your TypeSafe API key there (you can change it later under **Settings · API key**).
+Stop serving:
+
+```bash
+npm --prefix ~/intelliprompter run stop
+```
+
+Logs go to `~/intelliprompter/server.log`. To run in the foreground instead, use `npm start` inside the folder.
+
+Open http://localhost:9070. Settings opens on first run: paste your TypeSafe API key there (you can change it later under **Settings · API key**).
 
 To keep the key on the server instead, copy `.env.example` to `.env` and set
 `TYPESAFE_API_KEY`. That key then takes precedence over one pasted in the browser.
@@ -46,7 +58,7 @@ The list, checks and transcript are saved in your browser.
 |---|---|
 | `TYPESAFE_API_KEY` | none (use the Settings key) |
 | `JEV_MODEL` | `jev-latest` |
-| `PORT` | `3000` |
+| `PORT` | `9070` |
 | `TYPESAFE_API_URL` | `https://api.typesafe.ai/v1/systemone` |
 
 ## Develop
