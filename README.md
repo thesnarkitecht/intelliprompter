@@ -12,7 +12,7 @@ checked, so you only need to start on a topic. The next open item is highlighted
 
 ## Setup (1 minute)
 
-Needs Node.js 22+ and a TypeSafe API key (from the TypeSafe API console). There are no dependencies to install.
+Needs Node.js 22.9+ and a TypeSafe API key (from the TypeSafe API console). There are no dependencies to install.
 
 Install and start (installs to `~/intelliprompter`; re-run it to update):
 
