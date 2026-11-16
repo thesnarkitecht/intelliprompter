@@ -1,7 +1,7 @@
 // Self-check: core logic + the /api/check proxy against a fake Jev. Run: npm test
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { parseOutline, flatten, buildRequest, readAnswers, syncParents, takeSample } from './public/core.js';
+import { parseOutline, flatten, buildRequest, readAnswers, applyHits, syncParents, takeSample } from './public/core.js';
 
 // --- core ---
 const items = parseOutline('- Intro\nAgenda\n  * Results\n    Europe\n\t\tUS\n\t1. Roadmap\n\nClose\n');
@@ -20,9 +20,22 @@ const s1 = takeSample(long, 1000);
 assert.ok(s1.text.endsWith('new bit') && s1.text.length < 300, 'old text beyond the overlap is not resent');
 assert.equal(s1.sentUpTo, long.length);
 
+// sections: unopened ones are asked about so they can drop down; opened ones aren't
+assert.deepEqual(Object.values(buildRequest('x', items, new Set(['Intro'])).keys),
+  ['Agenda', 'Agenda › Results', 'Agenda › Results › Europe', 'Agenda › Results › US', 'Agenda › Roadmap', 'Close']);
+{
+  const d = new Set(), o = new Set();
+  assert.deepEqual(applyHits(items, ['Agenda'], d, o), ['Agenda'], 'starting a section opens it');
+  assert.equal(d.size, 0, 'opening a section does not check it');
+  assert.deepEqual(applyHits(items, ['Agenda › Results › US'], d, o), ['Agenda › Results'], 'a deep hit opens the path to it');
+  assert.ok(d.has('Agenda › Results › US'));
+  assert.deepEqual(applyHits(items, ['Agenda › Results › US'], d, o), [], 'nothing new to open');
+}
+
 const done = new Set(['Intro']);
-const { body, keys } = buildRequest('we covered the results', items, done);
-assert.deepEqual(Object.values(keys), ['Agenda › Results › Europe', 'Agenda › Results › US', 'Agenda › Roadmap', 'Close'], 'only open leaves');
+const opened = new Set(['Agenda', 'Agenda › Results']);
+const { body, keys } = buildRequest('we covered the results', items, done, opened);
+assert.deepEqual(Object.values(keys), ['Agenda › Results › Europe', 'Agenda › Results › US', 'Agenda › Roadmap', 'Close'], 'open leaves and unopened sections only');
 assert.equal(body.state.transcript, 'we covered the results');
 for (const [id, q] of Object.entries(body.questions)) {
   assert.equal(q.type, 'noul');

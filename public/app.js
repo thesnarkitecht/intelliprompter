@@ -1,4 +1,4 @@
-import { parseOutline, flatten, buildRequest, readAnswers, syncParents, takeSample, CHECK_EVERY_MS } from './core.js';
+import { parseOutline, flatten, buildRequest, readAnswers, applyHits, syncParents, takeSample, CHECK_EVERY_MS } from './core.js';
 
 const $ = id => document.getElementById(id);
 const store = {
@@ -24,6 +24,9 @@ Close and thank the audience`;
 let outline = store.get('outline', SAMPLE);
 let items = parseOutline(outline);
 let done = new Set(store.get('done', []));
+let opened = new Set(store.get('opened', [])); // sections whose sub-items are showing
+let shown = new Set(opened); // what's on screen, so render can animate the difference
+let jevCalls = 0;
 let probs = {};
 let finalText = store.get('transcript', '');
 let sentUpTo = finalText.length; // text before this was already checked
@@ -36,14 +39,24 @@ let serverKey = false;
 function render(flashKeys = []) {
   syncParents(items, done);
   const leaves = flatten(items).filter(i => !i.children.length);
-  const next = leaves.find(i => !done.has(i.key));
-  const tree = list => list.map(item => {
+  const visible = list => list.flatMap(i => [i, ...(opened.has(i.key) ? visible(i.children) : [])]);
+  // Next = first unfinished thing you can see: a leaf, or a section you haven't started.
+  const next = visible(items).find(i => !done.has(i.key) && !(i.children.length && opened.has(i.key)));
+
+  const tree = list => list.map((item, i) => {
     const li = document.createElement('li');
+    li.style.setProperty('--i', i);
     li.append(row(item, next, flashKeys));
     if (item.children.length) {
+      const sub = document.createElement('div');
+      sub.className = 'sub';
+      sub.dataset.key = item.key;
+      sub.classList.toggle('open', shown.has(item.key));
+      sub.inert = !shown.has(item.key);
       const ul = document.createElement('ul');
       ul.append(...tree(item.children));
-      li.append(ul);
+      sub.append(ul);
+      li.append(sub);
     }
     return li;
   });
@@ -56,6 +69,19 @@ function render(flashKeys = []) {
     li.textContent = '> list is empty. Click "Edit list" to add items.';
     list.append(li);
   }
+
+  // Drawn in the old state above; switch to the new one next frame so the change animates.
+  requestAnimationFrame(() => {
+    for (const sub of list.querySelectorAll('.sub')) {
+      const open = opened.has(sub.dataset.key);
+      if (open === sub.classList.contains('open')) continue;
+      void sub.offsetHeight; // commit the starting height so the transition runs
+      sub.classList.toggle('open', open);
+      sub.classList.toggle('opening', open);
+      sub.inert = !open;
+    }
+    shown = new Set(opened);
+  });
 
   const count = leaves.filter(i => done.has(i.key)).length;
   $('progress').textContent = `${count}/${leaves.length} DONE`;
@@ -88,7 +114,23 @@ function row(item, next, flashKeys) {
     prob.textContent = `${Math.round(probs[item.key] * 100)}%`;
     prob.title = 'Jev’s confidence that you started on this';
   }
-  label.append(box, text, prob);
+
+  let chev = document.createElement('span');
+  if (item.children.length) {
+    chev = document.createElement('button');
+    chev.type = 'button';
+    chev.className = 'chev';
+    const isOpen = opened.has(item.key);
+    chev.setAttribute('aria-expanded', String(isOpen));
+    chev.setAttribute('aria-label', `${isOpen ? 'Hide' : 'Show'} sub-items of ${item.text}`);
+    chev.addEventListener('click', e => {
+      e.preventDefault();
+      opened.has(item.key) ? opened.delete(item.key) : opened.add(item.key);
+      save();
+      render();
+    });
+  }
+  label.append(box, text, prob, chev);
   return label;
 }
 
@@ -102,6 +144,7 @@ function renderTranscript(interim = '') {
 function save() {
   store.set('outline', outline);
   store.set('done', [...done]);
+  store.set('opened', [...opened]);
   store.set('transcript', finalText);
 }
 
@@ -109,14 +152,15 @@ const status = text => { $('status').textContent = text; };
 
 // ---------- Jev ----------
 // Every 5 s, send only the text spoken since the last check (never the whole transcript).
+// No new words since the last check means no call: Jev is only used while you're talking.
 let inflight = false;
 
 async function runCheck() {
   if (inflight) return;
   const fresh = interim !== lastInterimSent ? interim : '';
   const sample = takeSample(finalText, sentUpTo, fresh);
-  if (!sample) return;
-  const { body, keys } = buildRequest(sample.text, items, done);
+  if (!sample) { if (recording) status(`quiet · jev waits for speech · ${jevCalls} calls`); return; }
+  const { body, keys } = buildRequest(sample.text, items, done, opened);
   if (!Object.keys(keys).length) { sentUpTo = sample.sentUpTo; return; }
 
   inflight = true;
@@ -124,18 +168,21 @@ async function runCheck() {
   try {
     const headers = { 'Content-Type': 'application/json' };
     if (settings.key) headers['X-TypeSafe-Key'] = settings.key;
+    jevCalls++;
     const res = await fetch('/api/check', { method: 'POST', headers, body: JSON.stringify(body) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || data.detail || data.message || `HTTP ${res.status}`);
 
     sentUpTo = sample.sentUpTo;
     lastInterimSent = fresh || lastInterimSent;
-    const { probs: p, newlyDone } = readAnswers(data.answers, keys, settings.threshold / 100);
+    const { probs: p, newlyDone: hits } = readAnswers(data.answers, keys, settings.threshold / 100);
     Object.assign(probs, p);
-    newlyDone.forEach(k => done.add(k));
+    const checkedBefore = done.size;
+    const justOpened = applyHits(items, hits, done, opened);
     save();
-    render(newlyDone);
-    status(newlyDone.length ? `✓ ${newlyDone.length} checked` : recording ? 'listening' : 'idle');
+    render([...hits, ...justOpened]);
+    const checked = done.size - checkedBefore;
+    status(checked ? `✓ ${checked} checked` : justOpened.length ? '▾ opened' : `${recording ? 'listening' : 'idle'} · ${jevCalls} jev calls`);
   } catch (e) {
     // sentUpTo isn't advanced, so the same text is retried on the next tick.
     status(`error: ${typeof e.message === 'string' ? e.message : 'request failed'}`.slice(0, 80));
@@ -219,6 +266,7 @@ $('saveBtn').addEventListener('click', () => {
   items = parseOutline(outline);
   const keys = new Set(flatten(items).map(i => i.key));
   done = new Set([...done].filter(k => keys.has(k)));
+  opened = new Set([...opened].filter(k => keys.has(k)));
   save();
   closeEditor();
   render();
@@ -241,6 +289,7 @@ $('resetBtn').addEventListener('click', () => {
   done.clear();
   probs = {};
   finalText = '';
+  opened.clear();
   sentUpTo = 0;
   interim = lastInterimSent = '';
   save();

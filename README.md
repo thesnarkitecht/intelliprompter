@@ -12,7 +12,7 @@ checked, so you only need to start on a topic. The next open item is highlighted
 
 ## Setup (1 minute)
 
-Needs Node.js 22+ and a TypeSafe API key (from the TypeSafe API console). There are no dependencies to install.
+Needs Node.js 22.9+ and a TypeSafe API key (from the TypeSafe API console). There are no dependencies to install.
 
 Install and start (installs to `~/intelliprompter`; re-run it to update):
 
@@ -47,7 +47,11 @@ To keep the key on the server instead, copy `.env.example` to `.env` and set
   when everything under it is.
 - **Start recording**: speak. Use Chrome, Edge or Safari (Firefox has no built-in speech recognition).
   You can also type lines into the box under the transcript.
-- Click any item to check or uncheck it yourself. Clicking a parent toggles everything under it.
+- Sections start folded. As soon as you start talking about a section, its sub-items drop down
+  (and so on, level by level). Jumping straight to a sub-sub-topic opens the path to it.
+  Use the arrow on a section to open or fold it yourself.
+- Click any item to check or uncheck it yourself. Clicking a parent's box toggles everything under it.
+- Jev is only called when you've said something new since the last check; silence costs nothing.
 - **Settings**: confidence threshold (default 70%) and speech language.
 - **Reset**: unchecks everything and clears the transcript.
 

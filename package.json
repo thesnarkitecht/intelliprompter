@@ -5,7 +5,7 @@
   "description": "Speak through a checklist; Jev (TypeSafe AI) checks items off from your live transcript.",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.9"
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
