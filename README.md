@@ -20,17 +20,18 @@ Install and start (installs to `~/intelliprompter`; re-run it to update):
 curl -fsSL https://raw.githubusercontent.com/thesnarkitecht/intelliprompter/main/install.sh | sh
 ```
 
-Start serving in the background:
+Then, from anywhere:
 
 ```bash
-npm --prefix ~/intelliprompter run serve
+intelliprompter serve
 ```
-
-Stop serving:
 
 ```bash
-npm --prefix ~/intelliprompter run stop
+intelliprompter stop
 ```
+
+`serve` runs it in the background at http://localhost:9070; `stop` shuts it down.
+The installer puts the `intelliprompter` command in `~/.local/bin` and tells you if that folder needs adding to your `PATH`.
 
 Logs go to `~/intelliprompter/server.log`. To run in the foreground instead, use `npm start` inside the folder.
 
