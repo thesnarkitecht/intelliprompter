@@ -4,10 +4,11 @@ Talk through your checklist; items tick themselves off as you say them.
 
 ![Intelliprompter](docs/screenshot.png)
 
-Your browser transcribes the microphone live. The transcript goes to
-[Jev](https://typesafe.ai), TypeSafe AI's decision model, which answers one
-yes/no question per open item: *"has the speaker covered this?"*. Items Jev is
-confident about get checked. The next open item is shown big at the top, like a prompter.
+Your browser transcribes the microphone live. Every 5 seconds, the text spoken
+since the last check (not the whole transcript) goes to [Jev](https://typesafe.ai),
+TypeSafe AI's decision model. Jev answers one yes/no question per open item:
+*"has the speaker started talking about this?"*. Items Jev is confident about get
+checked, so you only need to start on a topic. The next open item is highlighted.
 
 ## Setup (1 minute)
 
@@ -21,18 +22,19 @@ git clone https://github.com/thesnarkitecht/intelliprompter && cd intelliprompte
 npm start
 ```
 
-Open http://localhost:3000, click **Settings**, and paste your API key.
+Open http://localhost:3000. Settings opens on first run: paste your TypeSafe API key there (you can change it later under **Settings · API key**).
 
 To keep the key on the server instead, copy `.env.example` to `.env` and set
 `TYPESAFE_API_KEY`. That key then takes precedence over one pasted in the browser.
 
 ## Using it
 
-- **Edit list**: one item per line; indent a line (space or tab) to make it a sub-item.
-  A parent is checked automatically when all its sub-items are.
+- **Edit list**: one item per line; indent a line (space or tab) to make it a sub-item,
+  and indent further for sub-sub-items (any depth). A parent is checked automatically
+  when everything under it is.
 - **Start recording**: speak. Use Chrome, Edge or Safari (Firefox has no built-in speech recognition).
   You can also type lines into the box under the transcript.
-- Click any item to check or uncheck it yourself. Clicking a parent toggles all its sub-items.
+- Click any item to check or uncheck it yourself. Clicking a parent toggles everything under it.
 - **Settings**: confidence threshold (default 70%) and speech language.
 - **Reset**: unchecks everything and clears the transcript.
 
@@ -57,5 +59,5 @@ Files: `server.js` (static files + `/api/check` proxy), `public/core.js` (pure l
 ## Privacy notes
 
 - In Chrome and Edge, the browser's speech recognition sends audio to the browser vendor's servers.
-- Text transcripts go to TypeSafe through your local server.
+- Only new snippets of text (the last 5 seconds, plus up to 200 characters of overlap so split sentences still read whole) go to TypeSafe, through your local server.
 - A key pasted in Settings is stored in this browser's localStorage.

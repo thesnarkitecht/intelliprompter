@@ -16,13 +16,12 @@
     <span class="chip pixel" id="model">jev-latest</span>
     <span class="spacer"></span>
     <button class="chip" id="editBtn" type="button">Edit list</button>
-    <button class="chip" id="settingsBtn" type="button">Settings</button>
+    <button class="chip" id="settingsBtn" type="button">Settings · API key</button>
     <button class="chip dark" id="resetBtn" type="button">Reset</button>
   </nav>
 
   <header class="hero">
-    <p class="kicker">Speak <span class="dots"></span> Jev checks it off</p>
-    <h1 id="headline">Ready when you are.</h1>
+    <p class="kicker">Start talking about a topic <span class="dots"></span> Jev checks it off</p>
   </header>
 
   <main class="grid">
@@ -32,7 +31,7 @@
         <div class="meter" aria-hidden="true"><div id="meterFill"></div></div>
         <ul id="list" class="list"></ul>
         <div id="editor" class="editor" hidden>
-          <label for="outline" class="pixel">One item per line. Indent (space or tab) for sub-items.</label>
+          <label for="outline" class="pixel">One item per line. Indent (space or tab) for sub-items; indent more to nest deeper.</label>
           <textarea id="outline" rows="14" spellcheck="false"></textarea>
           <div class="row">
             <button class="btn dark" id="saveBtn" type="button">Save list</button>

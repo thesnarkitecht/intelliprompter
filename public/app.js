@@ -1,4 +1,4 @@
-import { parseOutline, flatten, buildRequest, readAnswers, syncParents } from './core.js';
+import { parseOutline, flatten, buildRequest, readAnswers, syncParents, takeSample, CHECK_EVERY_MS } from './core.js';
 
 const $ = id => document.getElementById(id);
 const store = {
@@ -13,6 +13,8 @@ Agenda for today
   Q&A
 Quarterly results
   Revenue grew 20 percent
+    Biggest gains in Europe
+    New enterprise customers
   Thank the sales team
 Product roadmap
   Launch of the mobile app
@@ -24,45 +26,40 @@ let items = parseOutline(outline);
 let done = new Set(store.get('done', []));
 let probs = {};
 let finalText = store.get('transcript', '');
+let sentUpTo = finalText.length; // text before this was already checked
+let interim = '';
+let lastInterimSent = '';
 let settings = { key: '', threshold: 70, lang: '', ...store.get('settings', {}) };
 let serverKey = false;
 
 // ---------- rendering ----------
 function render(flashKeys = []) {
   syncParents(items, done);
-  const list = $('list');
-  list.replaceChildren();
   const leaves = flatten(items).filter(i => !i.children.length);
   const next = leaves.find(i => !done.has(i.key));
+  const tree = list => list.map(item => {
+    const li = document.createElement('li');
+    li.append(row(item, next, flashKeys));
+    if (item.children.length) {
+      const ul = document.createElement('ul');
+      ul.append(...tree(item.children));
+      li.append(ul);
+    }
+    return li;
+  });
 
+  const list = $('list');
+  list.replaceChildren(...tree(items));
   if (!items.length) {
     const li = document.createElement('li');
     li.className = 'empty';
     li.textContent = '> list is empty. Click "Edit list" to add items.';
     list.append(li);
   }
-  for (const item of items) {
-    const li = document.createElement('li');
-    li.append(row(item, next, flashKeys));
-    if (item.children.length) {
-      const ul = document.createElement('ul');
-      for (const c of item.children) {
-        const cli = document.createElement('li');
-        cli.append(row(c, next, flashKeys));
-        ul.append(cli);
-      }
-      li.append(ul);
-    }
-    list.append(li);
-  }
 
   const count = leaves.filter(i => done.has(i.key)).length;
   $('progress').textContent = `${count}/${leaves.length} DONE`;
   $('meterFill').style.width = leaves.length ? `${(count / leaves.length) * 100}%` : '0';
-  const parent = next && items.find(i => i.children.includes(next));
-  $('headline').textContent = !leaves.length ? 'Add your list.'
-    : next ? (parent ? `${parent.text}: ${next.text}` : next.text)
-    : 'All done. Nice.';
 }
 
 function row(item, next, flashKeys) {
@@ -76,7 +73,7 @@ function row(item, next, flashKeys) {
   box.type = 'checkbox';
   box.checked = done.has(item.key);
   box.addEventListener('change', () => {
-    for (const i of [item, ...item.children]) box.checked ? done.add(i.key) : done.delete(i.key);
+    for (const i of flatten([item])) box.checked ? done.add(i.key) : done.delete(i.key);
     save();
     render();
   });
@@ -89,7 +86,7 @@ function row(item, next, flashKeys) {
   prob.className = 'prob';
   if (item.key in probs && !item.children.length) {
     prob.textContent = `${Math.round(probs[item.key] * 100)}%`;
-    prob.title = 'Jev’s confidence that this was covered';
+    prob.title = 'Jev’s confidence that you started on this';
   }
   label.append(box, text, prob);
   return label;
@@ -111,20 +108,16 @@ function save() {
 const status = text => { $('status').textContent = text; };
 
 // ---------- Jev ----------
+// Every 5 s, send only the text spoken since the last check (never the whole transcript).
 let inflight = false;
-let pending = false;
-let timer;
-
-function scheduleCheck() {
-  clearTimeout(timer);
-  timer = setTimeout(runCheck, 900);
-}
 
 async function runCheck() {
-  if (!finalText.trim()) return;
-  if (inflight) { pending = true; return; }
-  const { body, keys } = buildRequest(finalText, items, done);
-  if (!Object.keys(keys).length) return;
+  if (inflight) return;
+  const fresh = interim !== lastInterimSent ? interim : '';
+  const sample = takeSample(finalText, sentUpTo, fresh);
+  if (!sample) return;
+  const { body, keys } = buildRequest(sample.text, items, done);
+  if (!Object.keys(keys).length) { sentUpTo = sample.sentUpTo; return; }
 
   inflight = true;
   status('asking jev…');
@@ -135,20 +128,23 @@ async function runCheck() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || data.detail || data.message || `HTTP ${res.status}`);
 
+    sentUpTo = sample.sentUpTo;
+    lastInterimSent = fresh || lastInterimSent;
     const { probs: p, newlyDone } = readAnswers(data.answers, keys, settings.threshold / 100);
     Object.assign(probs, p);
     newlyDone.forEach(k => done.add(k));
     save();
     render(newlyDone);
-    status(newlyDone.length ? `✓ ${newlyDone.length} checked` : 'listening');
+    status(newlyDone.length ? `✓ ${newlyDone.length} checked` : recording ? 'listening' : 'idle');
   } catch (e) {
+    // sentUpTo isn't advanced, so the same text is retried on the next tick.
     status(`error: ${typeof e.message === 'string' ? e.message : 'request failed'}`.slice(0, 80));
-    if (!settings.key && !serverKey) $('settings').showModal();
+    if (!settings.key && !serverKey) openSettings();
   } finally {
     inflight = false;
-    if (pending) { pending = false; scheduleCheck(); }
   }
 }
+setInterval(runCheck, CHECK_EVERY_MS);
 
 function addFinal(text) {
   text = text.trim();
@@ -156,7 +152,6 @@ function addFinal(text) {
   finalText = finalText ? `${finalText} ${text}` : text;
   save();
   renderTranscript();
-  scheduleCheck();
 }
 
 // ---------- speech ----------
@@ -177,12 +172,13 @@ function startRec() {
   rec.interimResults = true;
   rec.lang = settings.lang || navigator.language || 'en-US';
   rec.onresult = e => {
-    let interim = '';
+    let live = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i];
       if (r.isFinal) addFinal(r[0].transcript);
-      else interim += r[0].transcript;
+      else live += r[0].transcript;
     }
+    interim = live;
     renderTranscript(interim);
   };
   rec.onerror = e => {
@@ -199,7 +195,7 @@ function startRec() {
 
 $('micBtn').addEventListener('click', () => {
   if (!SR) { $('speechWarn').hidden = false; $('typeInput').focus(); return; }
-  if (recording) { setRecording(false); rec.stop(); } else startRec();
+  if (recording) { setRecording(false); rec.stop(); interim = ''; } else startRec();
 });
 
 $('typeForm').addEventListener('submit', e => {
@@ -226,7 +222,6 @@ $('saveBtn').addEventListener('click', () => {
   save();
   closeEditor();
   render();
-  scheduleCheck();
 });
 
 // Tab inserts indentation instead of leaving the textarea (Esc then Tab still leaves).
@@ -246,6 +241,8 @@ $('resetBtn').addEventListener('click', () => {
   done.clear();
   probs = {};
   finalText = '';
+  sentUpTo = 0;
+  interim = lastInterimSent = '';
   save();
   render();
   renderTranscript();
@@ -254,19 +251,20 @@ $('resetBtn').addEventListener('click', () => {
 
 // ---------- settings ----------
 const dlg = $('settings');
-$('settingsBtn').addEventListener('click', () => {
+function openSettings() {
+  if (dlg.open) return;
   $('keyInput').value = settings.key;
   $('threshold').value = settings.threshold;
   $('thresholdOut').value = settings.threshold;
   $('langInput').value = settings.lang;
   dlg.showModal();
-});
+}
+$('settingsBtn').addEventListener('click', openSettings);
 $('threshold').addEventListener('input', e => { $('thresholdOut').value = e.target.value; });
 dlg.addEventListener('close', () => {
   if (dlg.returnValue !== 'save') return;
   settings = { key: $('keyInput').value.trim(), threshold: Number($('threshold').value), lang: $('langInput').value.trim() };
   store.set('settings', settings);
-  scheduleCheck();
 });
 
 // ---------- boot ----------
@@ -274,6 +272,7 @@ fetch('/api/config').then(r => r.json()).then(c => {
   serverKey = c.serverKey;
   $('model').textContent = c.model;
   if (serverKey) $('keyHint').textContent = 'The server already has TYPESAFE_API_KEY set, so this can stay empty.';
+  else if (!settings.key) openSettings();
 }).catch(() => {});
 
 if (!SR) $('speechWarn').hidden = false;

@@ -1,36 +1,54 @@
 // Self-check: core logic + the /api/check proxy against a fake Jev. Run: npm test
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { parseOutline, buildRequest, readAnswers, syncParents } from './public/core.js';
+import { parseOutline, flatten, buildRequest, readAnswers, syncParents, takeSample } from './public/core.js';
 
 // --- core ---
-const items = parseOutline('- Intro\nAgenda\n  * Results\n\t1. Roadmap\n\nClose\n');
+const items = parseOutline('- Intro\nAgenda\n  * Results\n    Europe\n\t\tUS\n\t1. Roadmap\n\nClose\n');
 assert.deepEqual(items.map(i => i.text), ['Intro', 'Agenda', 'Close']);
 assert.deepEqual(items[1].children.map(c => c.key), ['Agenda › Results', 'Agenda › Roadmap']);
+assert.deepEqual(items[1].children[0].children.map(c => c.key), ['Agenda › Results › Europe', 'Agenda › Results › US'], 'sub-sub-items nest');
 assert.deepEqual(parseOutline('  orphan sub-item').map(i => i.text), ['orphan sub-item']);
+assert.equal(flatten(items).length, 7);
+
+// samples: only new text (plus overlap) is sent
+assert.equal(takeSample('', 0), null);
+assert.equal(takeSample('old words', 9), null, 'nothing new → no request');
+assert.deepEqual(takeSample('old words', 9, 'still talking'), { text: 'old words still talking', sentUpTo: 9 });
+const long = 'x'.repeat(1000) + ' new bit';
+const s1 = takeSample(long, 1000);
+assert.ok(s1.text.endsWith('new bit') && s1.text.length < 300, 'old text beyond the overlap is not resent');
+assert.equal(s1.sentUpTo, long.length);
 
 const done = new Set(['Intro']);
 const { body, keys } = buildRequest('we covered the results', items, done);
-assert.deepEqual(Object.values(keys), ['Agenda › Results', 'Agenda › Roadmap', 'Close'], 'skips done items and parents');
+assert.deepEqual(Object.values(keys), ['Agenda › Results › Europe', 'Agenda › Results › US', 'Agenda › Roadmap', 'Close'], 'only open leaves');
+assert.equal(body.state.transcript, 'we covered the results');
 for (const [id, q] of Object.entries(body.questions)) {
   assert.equal(q.type, 'noul');
   assert.ok(q.instructions.includes(`\`checklist.${id}\``));
+  assert.ok(q.instructions.includes('started talking about'));
   assert.equal(body.state.checklist[id], keys[id]);
 }
 
 const ids = Object.keys(keys);
 const { probs, newlyDone } = readAnswers(
   { [ids[0]]: { type: 'noul', noul: 0.91 }, [ids[1]]: { type: 'noul', noul: 0.2 } }, keys, 0.7);
-assert.deepEqual(newlyDone, ['Agenda › Results']);
-assert.equal(probs['Agenda › Roadmap'], 0.2);
+assert.deepEqual(newlyDone, ['Agenda › Results › Europe']);
+assert.equal(probs['Agenda › Results › US'], 0.2);
 assert.ok(!('Close' in probs), 'missing answers are ignored');
 
 newlyDone.forEach(k => done.add(k));
-assert.ok(!syncParents(items, done).has('Agenda'));
+syncParents(items, done);
+assert.ok(!done.has('Agenda › Results') && !done.has('Agenda'));
+done.add('Agenda › Results › US');
+syncParents(items, done);
+assert.ok(done.has('Agenda › Results') && !done.has('Agenda'), 'middle level follows its children');
 done.add('Agenda › Roadmap');
-assert.ok(syncParents(items, done).has('Agenda'));
-done.delete('Agenda › Roadmap');
-assert.ok(!syncParents(items, done).has('Agenda'), 'parent unchecks when a sub-item does');
+assert.ok(syncParents(items, done).has('Agenda'), 'top level follows the middle level');
+done.delete('Agenda › Results › US');
+syncParents(items, done);
+assert.ok(!done.has('Agenda › Results') && !done.has('Agenda'), 'unchecking a leaf unchecks every ancestor');
 
 // --- server proxy against a fake Jev ---
 let seen;
