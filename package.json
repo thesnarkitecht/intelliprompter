@@ -1,0 +1,12 @@
+{
+  "name": "intelliprompter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Speak through a checklist; Jev (TypeSafe AI) checks items off from your live transcript.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "test": "node test.js"
+  }
+}

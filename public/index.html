@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Intelliprompter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <nav class="topbar">
+    <span class="chip brand">Intelliprompter</span>
+    <span class="chip pixel" id="model">jev-latest</span>
+    <span class="spacer"></span>
+    <button class="chip" id="editBtn" type="button">Edit list</button>
+    <button class="chip" id="settingsBtn" type="button">Settings</button>
+    <button class="chip dark" id="resetBtn" type="button">Reset</button>
+  </nav>
+
+  <header class="hero">
+    <p class="kicker">Speak <span class="dots"></span> Jev checks it off</p>
+    <h1 id="headline">Ready when you are.</h1>
+  </header>
+
+  <main class="grid">
+    <section class="window" aria-labelledby="listTitle">
+      <div class="titlebar"><span id="listTitle">CHECKLIST.TXT</span><span id="progress" class="pixel">0/0</span></div>
+      <div class="pane">
+        <div class="meter" aria-hidden="true"><div id="meterFill"></div></div>
+        <ul id="list" class="list"></ul>
+        <div id="editor" class="editor" hidden>
+          <label for="outline" class="pixel">One item per line. Indent (space or tab) for sub-items.</label>
+          <textarea id="outline" rows="14" spellcheck="false"></textarea>
+          <div class="row">
+            <button class="btn dark" id="saveBtn" type="button">Save list</button>
+            <button class="btn" id="cancelBtn" type="button">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="window" aria-labelledby="logTitle">
+      <div class="titlebar"><span id="logTitle">TRANSCRIPT.LOG</span><span id="status" class="pixel" role="status" aria-live="polite">idle</span></div>
+      <div class="pane">
+        <button id="micBtn" class="mic" type="button" aria-pressed="false">
+          <span class="dot" aria-hidden="true"></span><span id="micLabel">Start recording</span>
+        </button>
+        <p id="speechWarn" class="warn" hidden>This browser has no built-in speech recognition. Use Chrome, Edge or Safari, or type below.</p>
+        <div id="transcript" class="transcript" aria-live="off"><span class="final"></span><span class="interim"></span></div>
+        <form id="typeForm" class="row">
+          <label for="typeInput" class="sr-only">Type what you said</label>
+          <input id="typeInput" placeholder="…or type a line and press Enter" autocomplete="off">
+          <button class="btn" type="submit">Add</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot pixel">Transcribed in your browser · decisions by Jev (TypeSafe AI)</footer>
+
+  <dialog id="settings" class="window">
+    <form method="dialog">
+      <div class="titlebar"><span>SETTINGS.CFG</span></div>
+      <div class="pane">
+        <label for="keyInput">TypeSafe API key</label>
+        <input id="keyInput" type="password" autocomplete="off" placeholder="ts-…">
+        <p class="hint" id="keyHint">Stored in this browser only and sent to your local server.</p>
+        <label for="threshold">Check off when Jev is at least <output id="thresholdOut">70</output>% sure</label>
+        <input id="threshold" type="range" min="50" max="95" step="5" value="70">
+        <label for="langInput">Speech language</label>
+        <input id="langInput" placeholder="en-US">
+        <div class="row"><button class="btn dark" value="save">Save</button><button class="btn" value="cancel">Close</button></div>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
