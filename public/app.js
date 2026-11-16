@@ -1,4 +1,4 @@
-import { parseOutline, flatten, buildRequest, readAnswers, applyHits, syncParents, takeSample, CHECK_EVERY_MS } from './core.js';
+import { parseOutline, flatten, buildRequest, readAnswers, applyHits, syncParents, finishedSections, takeSample, CHECK_EVERY_MS } from './core.js';
 
 const $ = id => document.getElementById(id);
 const store = {
@@ -99,7 +99,9 @@ function row(item, next, flashKeys) {
   box.type = 'checkbox';
   box.checked = done.has(item.key);
   box.addEventListener('change', () => {
+    const before = new Set(done);
     for (const i of flatten([item])) box.checked ? done.add(i.key) : done.delete(i.key);
+    foldLater(finishedSections(items, done, before));
     save();
     render();
   });
@@ -132,6 +134,17 @@ function row(item, next, flashKeys) {
   }
   label.append(box, text, prob, chev);
   return label;
+}
+
+// Fold finished sections after a beat, so you see the last item get checked first.
+// The arrow still reopens them.
+function foldLater(keys) {
+  if (!keys.length) return;
+  setTimeout(() => {
+    keys.forEach(k => { if (done.has(k)) opened.delete(k); });
+    save();
+    render();
+  }, 1200);
 }
 
 function renderTranscript(interim = '') {
@@ -177,11 +190,13 @@ async function runCheck() {
     lastInterimSent = fresh || lastInterimSent;
     const { probs: p, newlyDone: hits } = readAnswers(data.answers, keys, settings.threshold / 100);
     Object.assign(probs, p);
-    const checkedBefore = done.size;
+    const before = new Set(done);
     const justOpened = applyHits(items, hits, done, opened);
+    const finished = finishedSections(items, done, before);
+    foldLater(finished);
     save();
     render([...hits, ...justOpened]);
-    const checked = done.size - checkedBefore;
+    const checked = done.size - before.size - finished.length;
     status(checked ? `✓ ${checked} checked` : justOpened.length ? '▾ opened' : `${recording ? 'listening' : 'idle'} · ${jevCalls} jev calls`);
   } catch (e) {
     // sentUpTo isn't advanced, so the same text is retried on the next tick.
