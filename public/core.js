@@ -33,14 +33,14 @@ export function takeSample(finalText, sentUpTo, interim = '') {
   return { text, sentUpTo: finalText.length };
 }
 
-// One Jev "noul" (yes/no probability) question per open leaf item.
-export function buildRequest(sample, items, done) {
+// One Jev "noul" (yes/no probability) question per open leaf, and per section not yet opened
+// (so its sub-items can drop down as soon as you start on it).
+export function buildRequest(sample, items, done, opened = new Set()) {
   const checklist = {};
   const questions = {};
   const keys = {};
   flatten(items).forEach((item, n) => {
-    // Parents follow their sub-items (see syncParents), so only leaves are asked about.
-    if (done.has(item.key) || item.children.length) return;
+    if (done.has(item.key) || opened.has(item.key)) return;
     const id = `q${n}`;
     checklist[id] = item.key;
     keys[id] = item.key;
@@ -65,6 +65,25 @@ export function readAnswers(answers, keys, threshold) {
     if (p >= threshold) newlyDone.push(key);
   }
   return { probs, newlyDone };
+}
+
+// A hit on a leaf checks it; a hit on a section opens it. Either way every section
+// above it opens too, so jumping straight to a sub-sub-topic reveals the path to it.
+// Returns the keys of sections that just opened.
+export function applyHits(items, hitKeys, done, opened) {
+  const hits = new Set(hitKeys);
+  const before = new Set(opened);
+  const walk = (list, ancestors) => {
+    for (const item of list) {
+      if (hits.has(item.key)) {
+        item.children.length ? opened.add(item.key) : done.add(item.key);
+        ancestors.forEach(a => opened.add(a.key));
+      }
+      walk(item.children, [...ancestors, item]);
+    }
+  };
+  walk(items, []);
+  return [...opened].filter(k => !before.has(k));
 }
 
 // Parents follow their sub-items at every level: all done → done, otherwise not done.
